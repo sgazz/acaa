@@ -37,10 +37,23 @@ class LLMClient:
         except requests.exceptions.RequestException as e:
             error_msg = f"Greška pri komunikaciji sa Ollama: {str(e)}"
             if "Connection refused" in str(e):
-                error_msg = "Nije moguće povezati se sa Ollama servisom. Proverite da li je Ollama pokrenuta."
+                print("⚠️  Ollama nije dostupna. Koristim mock odgovor.")
+                return self._generate_mock_response(prompt, system_prompt)
             raise Exception(error_msg)
         except Exception as e:
-            raise Exception(f"Neočekivana greška: {str(e)}")
+            print(f"⚠️  Neočekivana greška sa Ollama: {str(e)}. Koristim mock odgovor.")
+            return self._generate_mock_response(prompt, system_prompt)
+    
+    def _generate_mock_response(self, prompt: str, system_prompt: str = "") -> str:
+        """
+        Generiše mock odgovor kada Ollama nije dostupna.
+        """
+        if "zdravlje" in prompt.lower() or "medicina" in prompt.lower():
+            return "Ovo je mock odgovor za medicinsko pitanje. U produkciji bi ovde bio pravi AI odgovor."
+        elif "programiranje" in prompt.lower() or "kod" in prompt.lower():
+            return "Ovo je mock odgovor za programersko pitanje. U produkciji bi ovde bio pravi AI odgovor."
+        else:
+            return "Ovo je mock odgovor. U produkciji bi ovde bio pravi AI odgovor generisan od strane Ollama modela."
 
 # Kreiramo globalnu instancu
 llm_client = LLMClient() 

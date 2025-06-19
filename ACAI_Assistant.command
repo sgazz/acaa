@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Navigacija do direktorijuma projekta
-cd "/Volumes/External2TB/VS Projects/acai assistant"
+cd "/Volumes/External2TB/VS Projects/acai-assistant"
 
 # Provera da li skripta postoji
 if [ ! -f "start_servers.sh" ]; then

@@ -435,33 +435,33 @@ export default function DocumentList() {
                         {highlightText(doc.filename, search)}
                       </Box>
                     }
-                    secondary={
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Box component="span" color="text.secondary">
-                          {new Date(doc.created_at).toLocaleDateString('sr-RS')}
-                        </Box>
-                        <Chip
-                          label={doc.file_type}
-                          size="small"
-                          variant="outlined"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFilterChange('type', doc.file_type);
-                          }}
-                        />
-                        <Chip
-                          icon={getStatusIcon(doc.status)}
-                          label={doc.status}
-                          size="small"
-                          variant="outlined"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFilterChange('status', doc.status);
-                          }}
-                        />
-                      </Stack>
-                    }
                   />
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                    <Box component="span" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                      {new Date(doc.created_at).toLocaleDateString('sr-RS')}
+                    </Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip
+                        label={doc.file_type}
+                        size="small"
+                        variant="outlined"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFilterChange('type', doc.file_type);
+                        }}
+                      />
+                      <Chip
+                        icon={getStatusIcon(doc.status)}
+                        label={doc.status}
+                        size="small"
+                        variant="outlined"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFilterChange('status', doc.status);
+                        }}
+                      />
+                    </Stack>
+                  </Box>
                   <Tooltip title="Obriši dokument">
                     <IconButton
                       onClick={(e) => handleDeleteClick(doc, e)}
