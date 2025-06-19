@@ -40,10 +40,28 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
   };
 
   const handleFileSelect = async (file: File) => {
-    if (file.type === 'application/pdf' || 
-        file.type === 'application/msword' || 
-        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        file.type === 'text/plain') {
+    // Proširena lista podržanih formata
+    const supportedTypes = [
+      'application/pdf', // PDF
+      'application/msword', // DOC
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+      'text/plain', // TXT
+      'text/markdown', // MD
+      'text/x-rst', // RST
+      'text/x-python', // PY
+      'application/javascript', // JS
+      'application/typescript', // TS
+      'text/x-java-source', // JAVA
+      'text/x-c++src', // CPP
+      'text/x-csrc', // C
+      'text/html', // HTML
+      'application/json', // JSON
+      'application/x-yaml', // YAML
+      'text/xml', // XML
+      'text/csv' // CSV
+    ];
+    
+    if (supportedTypes.includes(file.type) || file.name.match(/\.(pdf|doc|docx|txt|md|rst|py|js|ts|java|cpp|c|html|json|yaml|yml|xml|csv)$/i)) {
       
       // Proveravamo da li postoji duplikat
       const duplicateCheck = await checkDuplicateDocument(file.name);
@@ -86,7 +104,7 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
         setUploadProgress(0);
       }
     } else {
-      alert('Podržani formati su: PDF, DOC, DOCX, TXT');
+      alert('Podržani formati su: PDF, DOC, DOCX, TXT, MD, RST, PY, JS, TS, JAVA, CPP, C, HTML, JSON, YAML, XML, CSV');
     }
   };
 
@@ -161,7 +179,7 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
           ref={fileInputRef}
           style={{ display: 'none' }}
           onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-          accept=".pdf,.doc,.docx,.txt"
+          accept=".pdf,.doc,.docx,.txt,.md,.rst,.py,.js,.ts,.java,.cpp,.c,.html,.json,.yaml,.yml,.xml,.csv"
         />
 
         {!selectedFile ? (
@@ -186,7 +204,7 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
               </Button>
             </Typography>
             <Typography variant="caption" color="text.secondary" align="center">
-              Podržani formati: PDF, DOC, DOCX, TXT
+              Podržani formati: PDF, DOC, DOCX, TXT, MD, RST, PY, JS, TS, JAVA, CPP, C, HTML, JSON, YAML, XML, CSV
             </Typography>
           </Box>
         ) : (
@@ -201,7 +219,10 @@ export default function DocumentUpload({ onUploadSuccess }: DocumentUploadProps)
                     {selectedFile.name}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {(selectedFile.size / 1024).toFixed(1)} KB
+                    {selectedFile.size && !isNaN(selectedFile.size) 
+                      ? `${(selectedFile.size / 1024).toFixed(1)} KB`
+                      : 'Nepoznata veličina'
+                    }
                   </Typography>
                 </Box>
                 <Tooltip title="Obriši">
