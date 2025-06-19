@@ -25,11 +25,54 @@ class RAGClient:
         if os.path.exists(self.index_path):
             try:
                 self.rag_service.load_index(self.index_path)
+                logger.info("RAG indeks uspešno učitan sa diska")
             except Exception as e:
                 logger.error(f"Greška pri učitavanju indeksa: {str(e)}")
                 os.makedirs(self.index_path, exist_ok=True)
+                self._load_documents_from_supabase()
         else:
             os.makedirs(self.index_path, exist_ok=True)
+            self._load_documents_from_supabase()
+
+    def _load_documents_from_supabase(self):
+        """Učitava sve postojeće dokumente iz Supabase-a u RAG indeks"""
+        try:
+            logger.info("Učitavam postojeće dokumente iz Supabase-a...")
+            
+            # Dohvatamo sve stranice iz baze
+            result = supabase.table("document_pages").select("*").execute()
+            
+            if not result.data:
+                logger.info("Nema postojećih dokumenata u bazi")
+                return
+            
+            logger.info(f"Pronađeno {len(result.data)} stranica u bazi")
+            
+            # Konvertujemo u format koji RAG servis očekuje
+            documents = []
+            for page in result.data:
+                doc = {
+                    "content": page["content"],
+                    "metadata": {
+                        "source": page.get("metadata", {}).get("source", "Unknown"),
+                        "page": page["page_number"],
+                        "document_id": page["document_id"]
+                    }
+                }
+                documents.append(doc)
+            
+            # Dodajemo u RAG indeks
+            logger.info(f"Dodajem {len(documents)} stranica u RAG indeks...")
+            self.rag_service.add_documents(documents)
+            
+            # Čuvamo indeks
+            logger.info("Čuvam RAG indeks...")
+            self.rag_service.save_index(self.index_path)
+            logger.info("RAG indeks uspešno kreiran i sačuvan")
+            
+        except Exception as e:
+            logger.error(f"Greška pri učitavanju dokumenata iz Supabase-a: {str(e)}")
+            logger.info("RAG sistem će raditi bez postojećih dokumenata")
 
     async def process_document(self, file: UploadFile) -> Dict[str, Any]:
         """Procesira uploadovani dokument"""
@@ -116,12 +159,20 @@ class RAGClient:
         return self.rag_service.search(query, k)
 
     def get_context_for_query(self, query: str, k: int = 8) -> Dict[str, Any]:
+        logger.info(f"Pretražujem dokumente za upit: {query}")
         results = self.search_documents(query, k)
+        logger.info(f"Pronađeno {len(results)} rezultata")
         
-        # Filtriramo rezultate sa niskim skorom
-        filtered_results = [doc for doc in results if doc.get("score", 0) > 0.3]
+        # Logujemo skorove za debug
+        for i, doc in enumerate(results):
+            logger.info(f"Rezultat {i+1}: score={doc.get('score', 0):.3f}, source={doc['metadata'].get('source', 'Unknown')}")
+        
+        # Filtriramo rezultate sa niskim skorom - smanjujemo prag sa 0.3 na 0.1
+        filtered_results = [doc for doc in results if doc.get("score", 0) > 0.1]
+        logger.info(f"Nakon filtriranja ostalo {len(filtered_results)} rezultata")
         
         if not filtered_results:
+            logger.info("Nema rezultata nakon filtriranja")
             return {
                 "context": "",
                 "sources": []
@@ -137,6 +188,8 @@ class RAGClient:
             }
             for doc in filtered_results
         ]
+        
+        logger.info(f"Vraćam {len(sources)} izvora")
         return {
             "context": context,
             "sources": sources

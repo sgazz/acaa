@@ -35,9 +35,17 @@ class RAGService:
         distances, indices = self.index.search(query_embedding, k)
         
         results = []
-        for idx in indices[0]:
+        for i, idx in enumerate(indices[0]):
             if idx < len(self.documents):
-                results.append(self.documents[idx])
+                # Konvertujemo distance u score (manja distance = veći score)
+                # FAISS koristi L2 distance, pa konvertujemo u similarity score
+                max_distance = np.max(distances[0]) if len(distances[0]) > 0 else 1.0
+                distance = distances[0][i]
+                score = 1.0 - (distance / max_distance) if max_distance > 0 else 0.0
+                
+                result = self.documents[idx].copy()
+                result["score"] = float(score)
+                results.append(result)
         
         return results
 
