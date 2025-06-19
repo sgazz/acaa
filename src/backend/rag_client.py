@@ -4,6 +4,7 @@ from fastapi import UploadFile
 import tempfile
 from rag.rag_service import RAGService
 from rag.document_processor import DocumentProcessor
+from rag.hybrid_search import HybridSearch
 from supabase_client import supabase
 import logging
 import uuid
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 class RAGClient:
     def __init__(self):
         self.rag_service = RAGService()
+        self.hybrid_search = HybridSearch(semantic_weight=0.7, lexical_weight=0.3)
         self.index_path = os.path.join(os.path.dirname(__file__), "data", "rag_index")
         self.temp_dir = os.path.join(os.path.dirname(__file__), "data", "temp")
         os.makedirs(self.temp_dir, exist_ok=True)
@@ -48,6 +50,11 @@ class RAGClient:
             
             logger.info(f"Pronađeno {len(result.data)} stranica u bazi")
             
+            # PRIVREMENO: Preskačemo učitavanje postojećih dokumenata
+            # da testiramo semantic chunking
+            logger.info("PRIVREMENO: Preskačem učitavanje postojećih dokumenata za testiranje semantic chunking-a")
+            return
+            
             # Konvertujemo u format koji RAG servis očekuje
             documents = []
             for page in result.data:
@@ -64,6 +71,10 @@ class RAGClient:
             # Dodajemo u RAG indeks
             logger.info(f"Dodajem {len(documents)} stranica u RAG indeks...")
             self.rag_service.add_documents(documents)
+            
+            # Dodajemo u hybrid indeks
+            logger.info(f"Dodajem {len(documents)} stranica u hybrid indeks...")
+            self.hybrid_search.add_documents(documents)
             
             # Čuvamo indeks
             logger.info("Čuvam RAG indeks...")
@@ -89,8 +100,8 @@ class RAGClient:
             
             # Procesiramo dokument
             logger.info("Započinjem procesiranje dokumenta...")
-            documents = DocumentProcessor.process_file(temp_file_path)
-            logger.info(f"Dokument uspešno procesiran. Broj stranica: {len(documents)}")
+            documents = DocumentProcessor.process_file(temp_file_path, chunk_size=1000, overlap=200)
+            logger.info(f"Dokument uspešno procesiran. Broj chunk-ova: {len(documents)}")
             
             # Čuvamo dokument u Supabase
             try:
@@ -134,6 +145,10 @@ class RAGClient:
             logger.info("Dodajem dokument u RAG indeks...")
             self.rag_service.add_documents(documents)
             
+            # Dodajemo u hybrid indeks
+            logger.info("Dodajem dokument u hybrid indeks...")
+            self.hybrid_search.add_documents(documents)
+            
             # Čuvamo indeks
             logger.info("Čuvam RAG indeks...")
             self.rag_service.save_index(self.index_path)
@@ -155,8 +170,22 @@ class RAGClient:
                 logger.info("Privremeni fajl obrisan")
 
     def search_documents(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
-        """Pretražuje dokumente na osnovu upita"""
-        return self.rag_service.search(query, k)
+        """Pretražuje dokumente koristeći hybrid search"""
+        try:
+            # Generišemo embedding za upit
+            query_embedding = self.rag_service.embedding_model.encode([query])[0]
+            
+            # Izvršavamo hybrid pretragu
+            results = self.hybrid_search.search(query, query_embedding, self.rag_service.faiss_index, k)
+            
+            logger.info(f"Hybrid pretraga završena. Pronađeno {len(results)} rezultata")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Greška u hybrid pretrazi: {e}")
+            # Fallback na običnu FAISS pretragu
+            logger.info("Koristim fallback na FAISS pretragu")
+            return self.rag_service.search(query, k)
 
     def get_context_for_query(self, query: str, k: int = 8) -> Dict[str, Any]:
         logger.info(f"Pretražujem dokumente za upit: {query}")
@@ -165,10 +194,13 @@ class RAGClient:
         
         # Logujemo skorove za debug
         for i, doc in enumerate(results):
-            logger.info(f"Rezultat {i+1}: score={doc.get('score', 0):.3f}, source={doc['metadata'].get('source', 'Unknown')}")
+            semantic_score = doc.get('semantic_score', 0)
+            lexical_score = doc.get('lexical_score', 0)
+            combined_score = doc.get('combined_score', doc.get('score', 0))
+            logger.info(f"Rezultat {i+1}: semantic={semantic_score:.3f}, lexical={lexical_score:.3f}, combined={combined_score:.3f}, source={doc['metadata'].get('source', 'Unknown')}")
         
-        # Filtriramo rezultate sa niskim skorom - smanjujemo prag sa 0.3 na 0.1
-        filtered_results = [doc for doc in results if doc.get("score", 0) > 0.1]
+        # Filtriramo rezultate sa niskim skorom - smanjujemo prag sa 0.1 na 0.01
+        filtered_results = [doc for doc in results if doc.get("combined_score", doc.get("score", 0)) > 0.01]
         logger.info(f"Nakon filtriranja ostalo {len(filtered_results)} rezultata")
         
         if not filtered_results:
@@ -184,7 +216,9 @@ class RAGClient:
                 "filename": doc["metadata"].get("source", "Unknown"),
                 "page_number": doc["metadata"].get("page", 0),
                 "content": doc["content"][:200] + "..." if len(doc["content"]) > 200 else doc["content"],
-                "relevance_score": round(doc.get("score", 0) * 100, 2)
+                "relevance_score": round(doc.get("combined_score", doc.get("score", 0)) * 100, 2),
+                "semantic_score": round(doc.get("semantic_score", 0) * 100, 2),
+                "lexical_score": round(doc.get("lexical_score", 0) * 100, 2)
             }
             for doc in filtered_results
         ]
