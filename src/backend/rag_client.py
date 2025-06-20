@@ -5,6 +5,9 @@ import tempfile
 from rag.rag_service import RAGService
 from rag.document_processor import DocumentProcessor
 from rag.hybrid_search import HybridSearch
+from rag.reranker_service import RerankerService
+from rag.query_expander import QueryExpander
+from rag.context_optimizer import ContextOptimizer
 from supabase_client import supabase
 import logging
 import uuid
@@ -17,6 +20,9 @@ class RAGClient:
     def __init__(self):
         self.rag_service = RAGService()
         self.hybrid_search = HybridSearch(semantic_weight=0.7, lexical_weight=0.3)
+        self.reranker = RerankerService()
+        self.query_expander = QueryExpander()
+        self.context_optimizer = ContextOptimizer(max_tokens=4000, max_chunks=10)
         self.index_path = os.path.join(os.path.dirname(__file__), "data", "rag_index")
         self.temp_dir = os.path.join(os.path.dirname(__file__), "data", "temp")
         os.makedirs(self.temp_dir, exist_ok=True)
@@ -169,62 +175,148 @@ class RAGClient:
                 os.remove(temp_file_path)
                 logger.info("Privremeni fajl obrisan")
 
-    def search_documents(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
-        """Pretražuje dokumente koristeći hybrid search"""
+    def search_documents(self, query: str, k: int = 3, use_query_expansion: bool = True, 
+                        expansion_type: str = "hybrid") -> List[Dict[str, Any]]:
+        """Pretražuje dokumente koristeći hybrid search + reranking + query expansion"""
         try:
-            # Generišemo embedding za upit
-            query_embedding = self.rag_service.embedding_model.encode([query])[0]
+            # Query Expansion
+            if use_query_expansion:
+                logger.info(f"Primenjujem Query Expansion (tip: {expansion_type})")
+                expansion_result = self.query_expander.expand_query_with_metadata(query, expansion_type)
+                expanded_queries = expansion_result["expanded_queries"]
+                logger.info(f"Query Expansion: {len(expanded_queries)} upita generisano")
+            else:
+                expanded_queries = [query]
+                expansion_result = None
             
-            # Izvršavamo hybrid pretragu
-            results = self.hybrid_search.search(query, query_embedding, self.rag_service.faiss_index, k)
+            # Kombiniramo rezultate iz svih proširenih upita
+            all_results = []
             
-            logger.info(f"Hybrid pretraga završena. Pronađeno {len(results)} rezultata")
-            return results
+            for i, expanded_query in enumerate(expanded_queries):
+                logger.info(f"Pretražujem prošireni upit {i+1}/{len(expanded_queries)}: '{expanded_query}'")
+                
+                # Generišemo embedding za prošireni upit
+                query_embedding = self.rag_service.model.encode([expanded_query])[0]
+                
+                # Izvršavamo hybrid pretragu sa više rezultata za reranking
+                initial_k = min(k * 3, 20)  # Uzimamo više rezultata za reranking
+                results = self.hybrid_search.search(expanded_query, query_embedding, self.rag_service.index, initial_k)
+                
+                # Dodajemo informacije o proširenom upitu
+                for result in results:
+                    result["expanded_query"] = expanded_query
+                    result["query_index"] = i
+                
+                all_results.extend(results)
             
+            logger.info(f"Ukupno pronađeno {len(all_results)} rezultata iz svih proširenih upita")
+            
+            # Ako imamo rezultate, izvršavamo reranking
+            if all_results:
+                logger.info("Započinjem reranking rezultata...")
+                reranked_results = self.reranker.rerank(query, all_results, top_k=k)
+                
+                # Dodajemo metapodatke o query expansion-u
+                if expansion_result:
+                    for result in reranked_results:
+                        result["expansion_metadata"] = {
+                            "original_query": expansion_result["original_query"],
+                            "expansion_type": expansion_result["expansion_type"],
+                            "total_expansions": expansion_result["total_expansions"],
+                            "detected_domains": expansion_result["analysis"]["detected_domains"]
+                        }
+                
+                logger.info(f"Reranking završen. Vraćam {len(reranked_results)} rezultata")
+                return reranked_results
+            else:
+                logger.info("Nema rezultata za reranking")
+                return []
+                
         except Exception as e:
-            logger.error(f"Greška u hybrid pretrazi: {e}")
-            # Fallback na običnu FAISS pretragu
-            logger.info("Koristim fallback na FAISS pretragu")
-            return self.rag_service.search(query, k)
+            logger.error(f"Greška pri pretraživanju dokumenata: {e}")
+            raise
 
-    def get_context_for_query(self, query: str, k: int = 8) -> Dict[str, Any]:
+    def get_context_for_query(self, query: str, k: int = 8, use_context_optimization: bool = True,
+                             optimization_type: str = "smart") -> Dict[str, Any]:
         logger.info(f"Pretražujem dokumente za upit: {query}")
-        results = self.search_documents(query, k)
+        
+        # Koristimo search_documents sa query expansion-om
+        results = self.search_documents(query, k, use_query_expansion=True, expansion_type="hybrid")
         logger.info(f"Pronađeno {len(results)} rezultata")
         
-        # Logujemo skorove za debug
-        for i, doc in enumerate(results):
-            semantic_score = doc.get('semantic_score', 0)
-            lexical_score = doc.get('lexical_score', 0)
-            combined_score = doc.get('combined_score', doc.get('score', 0))
-            logger.info(f"Rezultat {i+1}: semantic={semantic_score:.3f}, lexical={lexical_score:.3f}, combined={combined_score:.3f}, source={doc['metadata'].get('source', 'Unknown')}")
-        
-        # Filtriramo rezultate sa niskim skorom - smanjujemo prag sa 0.1 na 0.01
-        filtered_results = [doc for doc in results if doc.get("combined_score", doc.get("score", 0)) > 0.01]
-        logger.info(f"Nakon filtriranja ostalo {len(filtered_results)} rezultata")
-        
-        if not filtered_results:
-            logger.info("Nema rezultata nakon filtriranja")
+        # Context Optimization
+        if use_context_optimization and results:
+            logger.info(f"Primenjujem Context Optimization (tip: {optimization_type})")
+            context_result = self.context_optimizer.optimize_context(results, query, optimization_type)
+            
+            # Strukturiramo rezultat
+            context = context_result["context"]
+            context_metadata = context_result["metadata"]
+            
+            # Konvertujemo u postojeći format
+            sources = []
+            for source_info in context_metadata["sources"]:
+                source = {
+                    "filename": source_info["filename"],
+                    "page": source_info["page"],
+                    "relevance_score": int(source_info["score"] * 100),
+                    "rerank_score": int(source_info["score"] * 100),
+                    "content_preview": source_info["content_preview"]
+                }
+                sources.append(source)
+            
             return {
-                "context": "",
-                "sources": []
+                "context": context,
+                "sources": sources,
+                "optimization_metadata": {
+                    "optimization_type": optimization_type,
+                    "total_documents": context_metadata["total_documents"],
+                    "total_tokens": context_metadata["total_tokens"],
+                    "average_score": context_metadata["average_score"],
+                    "utilization_percentage": context_metadata["utilization_percentage"]
+                }
             }
-        
-        context = "\n\n".join([doc["content"] for doc in filtered_results])
-        sources = [
-            {
-                "filename": doc["metadata"].get("source", "Unknown"),
-                "page_number": doc["metadata"].get("page", 0),
-                "content": doc["content"][:200] + "..." if len(doc["content"]) > 200 else doc["content"],
-                "relevance_score": round(doc.get("combined_score", doc.get("score", 0)) * 100, 2),
-                "semantic_score": round(doc.get("semantic_score", 0) * 100, 2),
-                "lexical_score": round(doc.get("lexical_score", 0) * 100, 2)
-            }
-            for doc in filtered_results
-        ]
-        
-        logger.info(f"Vraćam {len(sources)} izvora")
-        return {
-            "context": context,
-            "sources": sources
-        } 
+        else:
+            # Fallback na originalnu logiku
+            logger.info("Koristim originalnu logiku bez Context Optimization-a")
+            
+            # Filtriranje rezultata
+            filtered_results = []
+            for result in results:
+                score = result.get("rerank_score", result.get("combined_score", result.get("score", 0)))
+                if score > 0.01:  # Minimalan score threshold
+                    filtered_results.append(result)
+            
+            logger.info(f"Nakon filtriranja ostalo {len(filtered_results)} rezultata")
+            
+            if not filtered_results:
+                logger.info("Nema rezultata nakon filtriranja")
+                return {"context": "", "sources": []}
+            
+            # Strukturiramo kontekst
+            context_parts = [f"UPIT: {query}", "=" * 50]
+            sources = []
+            
+            for i, result in enumerate(filtered_results[:k]):
+                content = result.get("content", "")
+                source = result.get("metadata", {}).get("source", "Unknown")
+                score = result.get("rerank_score", result.get("combined_score", result.get("score", 0)))
+                
+                # Dodajemo u kontekst
+                context_parts.append(f"\nDOKUMENT {i+1}: {source} (Score: {score:.3f})")
+                context_parts.append("-" * 30)
+                context_parts.append(content)
+                
+                # Dodajemo u sources
+                source_info = {
+                    "filename": source,
+                    "page": result.get("metadata", {}).get("page", 0),
+                    "relevance_score": int(score * 100),
+                    "rerank_score": int(score * 100),
+                    "content_preview": content[:200] + "..." if len(content) > 200 else content
+                }
+                sources.append(source_info)
+            
+            context = "\n".join(context_parts)
+            
+            return {"context": context, "sources": sources} 

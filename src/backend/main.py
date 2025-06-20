@@ -178,6 +178,88 @@ async def search_documents(query: str, k: int = 3):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/documents/search-with-rerank")
+async def search_documents_with_rerank(query: str, k: int = 5):
+    """Endpoint za pretragu dokumenata sa detaljnim reranking informacijama"""
+    try:
+        # Koristimo rerank_with_metadata za detaljne informacije
+        rerank_result = rag_client.reranker.rerank_with_metadata(query, [], k)
+        
+        # Prvo dobavljamo rezultate iz hybrid pretrage
+        initial_k = min(k * 3, 20)
+        query_embedding = rag_client.rag_service.model.encode([query])[0]
+        initial_results = rag_client.hybrid_search.search(query, query_embedding, rag_client.rag_service.index, initial_k)
+        
+        if initial_results:
+            rerank_result = rag_client.reranker.rerank_with_metadata(query, initial_results, k)
+        
+        return rerank_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/query/expand")
+async def expand_query(query: str, expansion_type: str = "hybrid"):
+    """Endpoint za testiranje Query Expansion-a"""
+    try:
+        expansion_result = rag_client.query_expander.expand_query_with_metadata(query, expansion_type)
+        return expansion_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/context/optimize")
+async def optimize_context(query: str, documents: List[Dict[str, Any]], 
+                          optimization_type: str = "smart"):
+    """Endpoint za testiranje Context Optimization-a"""
+    try:
+        context_result = rag_client.context_optimizer.optimize_context(
+            documents, query, optimization_type
+        )
+        return context_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/search/advanced")
+async def advanced_search(query: str, k: int = 5, use_query_expansion: bool = True,
+                         expansion_type: str = "hybrid", use_context_optimization: bool = True,
+                         optimization_type: str = "smart"):
+    """Napredna pretraga sa svim optimizacijama"""
+    try:
+        # Query Expansion
+        if use_query_expansion:
+            expansion_result = rag_client.query_expander.expand_query_with_metadata(query, expansion_type)
+            logger.info(f"Query Expansion: {len(expansion_result['expanded_queries'])} upita")
+        else:
+            expansion_result = None
+        
+        # Pretraga sa proširenim upitima
+        search_results = rag_client.search_documents(
+            query, k, use_query_expansion, expansion_type
+        )
+        
+        # Context Optimization
+        if use_context_optimization and search_results:
+            context_result = rag_client.context_optimizer.optimize_context(
+                search_results, query, optimization_type
+            )
+        else:
+            context_result = None
+        
+        return {
+            "query": query,
+            "search_results": search_results,
+            "expansion_info": expansion_result,
+            "context_info": context_result,
+            "settings": {
+                "use_query_expansion": use_query_expansion,
+                "expansion_type": expansion_type,
+                "use_context_optimization": use_context_optimization,
+                "optimization_type": optimization_type,
+                "k": k
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/documents/{document_id}")
 async def delete_document(document_id: str):
     """Endpoint za brisanje dokumenta"""

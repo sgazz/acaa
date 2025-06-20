@@ -16,6 +16,10 @@ interface SearchResult {
     page?: number;
     type: string;
   };
+  rerank_score?: number;
+  semantic_score?: number;
+  lexical_score?: number;
+  relevance_score?: number;
 }
 
 interface SearchResultsProps {
@@ -88,6 +92,28 @@ export default function SearchResults({ results, query, highlightText }: SearchR
                     label={result.metadata.type.toUpperCase()}
                     sx={{ bgcolor: 'action.selected' }}
                   />
+                  {result.rerank_score !== undefined && (
+                    <Chip
+                      size="small"
+                      label={`Rerank: ${result.rerank_score.toFixed(1)}%`}
+                      sx={{ 
+                        bgcolor: 'success.light', 
+                        color: 'success.contrastText',
+                        fontSize: '0.7rem'
+                      }}
+                    />
+                  )}
+                  {result.relevance_score !== undefined && (
+                    <Chip
+                      size="small"
+                      label={`Relevance: ${result.relevance_score.toFixed(1)}%`}
+                      sx={{ 
+                        bgcolor: 'info.light', 
+                        color: 'info.contrastText',
+                        fontSize: '0.7rem'
+                      }}
+                    />
+                  )}
                 </Box>
                 <Typography
                   variant="body2"

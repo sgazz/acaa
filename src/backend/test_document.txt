@@ -1,44 +1,21 @@
-DIJABETES - OBRAZOVNI MATERIJAL
+Python programiranje i RAG sistemi
 
-Diabetes je metabolička bolest koja se javlja kada telo ne može da kontroliše razinu šećera u krvi zbog nedostatka ili nedovoljne radivosti insulina. Postoji dve glavne vrste dijabetesa:
+Python je programski jezik visokog nivoa koji se koristi za razvoj web aplikacija, data science, veštačku inteligenciju i mašinsko učenje. Python ima jednostavan i čitljiv sintaksu što ga čini popularnim za početnike i iskusne programere.
 
-TIP 1 DIJABETES:
-- Javlja se zbog unutrašnje imunološke reakcije koja smanjuje proizvodnju i funkcionalnost insulina
-- Obično se javlja u mladosti
-- Zahteva dnevne injekcije insulina
-- Ne može se sprečiti
+RAG (Retrieval-Augmented Generation) sistemi su napredna tehnologija koja kombinuje pretragu dokumenata sa generisanjem teksta. Ovi sistemi koriste bazu znanja za poboljšanje kvaliteta odgovora i smanjenje halucinacija.
 
-TIP 2 DIJABETES:
-- Povezan sa prekomjernom težinom i manjkavim fizičkim aktivnošću
-- Može se sprečiti zdravim načinom života
-- Može se kontrolisati dijetom i lekovima
-- Često se javlja u starijim godinama
+Web development sa Python-om uključuje korišćenje framework-ova kao što su Django, Flask i FastAPI. FastAPI je moderan web framework koji omogućava brz razvoj API-ja sa automatskom dokumentacijom.
 
-SIMPTOMI DIJABETESA:
-- Često mokrenje
-- Prekomerna žeđ
-- Prekomerna glad
-- Gubitak težine
-- Umor
-- Zamagljen vid
+Machine Learning je grana veštačke inteligencije koja omogućava računarima da uče bez eksplicitnog programiranja. ML algoritmi koriste podatke za treniranje modela koji mogu da prave predviđanja i klasifikuju podatke.
 
-KOMPLIKACIJE:
-- Oštećenje očiju (retinopatija)
-- Oštećenje bubrega (nefropatija)
-- Oštećenje živaca (neuropatija)
-- Kardiovaskularne bolesti
-- Problemi sa nogama
+Docker je platforma za razvoj, isporuku i pokretanje aplikacija u kontejnerima. Docker omogućava izolaciju aplikacija i konzistentno okruženje kroz različite platforme.
 
-LEČENJE:
-- Kontrola šećera u krvi
-- Regulisanje težine
-- Pravilno ishranjenje
-- Fizička aktivnost
-- Redovne kontrole kod lekara
+React je JavaScript biblioteka za izgradnju korisničkih interfejsa. React koristi komponente i virtualni DOM za efikasno ažuriranje UI-ja. React se često koristi u kombinaciji sa Python backend-om za full-stack aplikacije.
 
-PREVENCIJA:
-- Održavanje zdrave težine
-- Redovna fizička aktivnost
-- Zdrava ishrana
-- Izbegavanje pušenja
-- Redovne kontrole krvi 
+Baze podataka su ključni deo svake aplikacije. SQL baze podataka kao što su PostgreSQL i MySQL se koriste za strukturirane podatke, dok NoSQL baze kao MongoDB i Redis se koriste za fleksibilnije podatke.
+
+DevOps praksa uključuje automatizaciju procesa razvoja, testiranja i deployment-a. CI/CD pipeline-ovi omogućavaju kontinuiranu integraciju i kontinuirani deployment aplikacija.
+
+API (Application Programming Interface) je skup pravila i protokola koji omogućavaju različitim aplikacijama da komuniciraju. REST API-ji su najpopularniji tip API-ja koji koriste HTTP metode za komunikaciju.
+
+Cloud computing omogućava pristup računarskim resursima preko interneta. AWS, Azure i Google Cloud su najpopularniji cloud provider-i koji nude različite servise za hosting aplikacija. 
