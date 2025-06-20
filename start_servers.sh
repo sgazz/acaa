@@ -24,7 +24,7 @@ start_backend() {
     echo "Pokrećem backend server..."
     cd src/backend
     source venv/bin/activate
-    uvicorn main:app --reload --port 8001 &
+    uvicorn main:app --host 0.0.0.0 --reload --port 8001 &
     BACKEND_PID=$!
     cd ../..
     echo "Backend server je pokrenut (PID: $BACKEND_PID)"
@@ -70,16 +70,23 @@ echo "Čekam da frontend server bude spreman..."
 sleep 5
 
 # Otvaranje browsera
-echo "Otvaram aplikaciju u browseru..."
+# Pronađi port na kojem frontend radi (3000 ili 3001)
+FRONTEND_PORT=3000
+if lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null ; then
+    FRONTEND_PORT=3001
+fi
+
+APP_URL="http://localhost:$FRONTEND_PORT"
+echo "Otvaram aplikaciju u browseru na $APP_URL..."
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
-    open http://localhost:3000
+    open $APP_URL
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     # Linux
-    xdg-open http://localhost:3000
+    xdg-open $APP_URL
 elif [[ "$OSTYPE" == "msys" ]]; then
     # Windows
-    start http://localhost:3000
+    start $APP_URL
 fi
 
 echo "Serversi su pokrenuti! Pritisnite Ctrl+C za zaustavljanje."
